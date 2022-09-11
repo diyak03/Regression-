@@ -5,8 +5,8 @@ This repository is where all my regression projects will be stored (mostly linea
 This project was done as a final project for a class which delved into linear regression (simple and multiple) and how to utilize it appropriately when analyzing data. The project used a dataset from a grocery store and I utilized certain columns (pertaining to consumer data) to analyze what customer traits (if any) were able to predict wine sales. If you don't want to see the code used for the project, within the repository there is a word document named "wine analysis" where you can get the summary and results of the project! 
 
 ##### data used: 
-marketing_campaign.csv
+the CSV file "marketing_campaign.csv"
 
 
 ##### Project name:
-wine analysis.Rmd
+"wine analysis.Rmd"
