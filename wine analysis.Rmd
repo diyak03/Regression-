@@ -1,0 +1,342 @@
+---
+title: "Wine analysis" 
+output: html_notebook
+---
+
+downloading packages that will help with making the presentation nicer
+```{r}
+
+
+install.packages("sjPlot")
+install.packages("sjmisc")
+install.packages("sjlabelled")
+
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(car)
+
+```
+
+Loading and Cleaning the data
+```{r}
+marketing_campaign <- read.delim("~/STA302 21/pp/marketing_campaign.csv")
+
+#income seems to be the only variable that has missing values (response bias)
+marketing_campaign <- marketing_campaign[!(is.na(marketing_campaign$Income)|marketing_campaign$Income==""), ]
+
+#deleting coloumns that will not be important in my analysis 
+marketing_campaign <- subset(marketing_campaign, select = -c(1,9,11:29))
+
+
+#check for missing values again to make sure
+is.na(marketing_campaign) 
+#returns all values in all coloumns as false, therefore we do not have missing values! 
+
+#making the data easier to work with (changing date format/ fixing marital status)
+marketing_campaign$Dt_Customer <- substr(marketing_campaign$Dt_Customer,7,10)
+as.numeric(marketing_campaign$Dt_Customer)
+
+table(marketing_campaign$Marital_Status)
+#changing yolo/absurd/alone to other & combining married and together to relationship 
+marketing_campaign["Marital_Status"][marketing_campaign["Marital_Status"] == "Absurd"] <- "other"
+marketing_campaign["Marital_Status"][marketing_campaign["Marital_Status"] == "Alone"] <- "other"
+marketing_campaign["Marital_Status"][marketing_campaign["Marital_Status"] == "YOLO"] <- "other"
+marketing_campaign["Marital_Status"][marketing_campaign["Marital_Status"] == "Married"] <- "relationship"
+marketing_campaign["Marital_Status"][marketing_campaign["Marital_Status"] == "Together"] <- "relationship"
+
+```
+
+Training and Testing data
+```{r}
+set.seed(1)
+
+sample_size = round(nrow(marketing_campaign)*.60) 
+index <- sample(seq_len(nrow(marketing_campaign)), size = sample_size)
+ 
+train <- marketing_campaign[index, ]
+test <- marketing_campaign[-index, ]
+```
+
+Making sure both data sets are similar:
+```{r}
+summary(lm(train))
+summary(lm(test))
+```
+
+
+
+EDA
+```{r}
+#renaming for better use
+Birth_Year  <- train$Year_Birth
+Education <- train$Education
+Marital_staus <-train$Marital_Status
+Income <- train$Income
+Kids <- train$Kidhome
+Teens <- train $Teenhome
+Customer_joined <- train$Dt_Customer
+Wine <- train$MntWines
+
+#defining the response variable 
+resp <-train$MntWines
+
+#looking at scatterplots of the variables 
+plot(train)
+
+#make histograms/barplots for each variable 
+barplot(table(train$Education), main = "Education level", xlab = "Type of education")
+barplot(table(train$Marital_Status), main = "Marital status", xlab = "Marital status")
+barplot(table(train$Kidhome), main = "Amount of kids at home", xlab = "Number of Kids")
+barplot(table(train$Teenhome), main = "Amount of teens at home", xlab = "Number of Teens")
+barplot(table(train$Dt_Customer), main = "Customer membership date", xlab = "Year customer joined")
+hist(train$Year_Birth, main = "Customer birth year", xlab = "Birth year")
+hist(train$Income, main = "Customer income", xlab = "Income (in dollarS)")
+hist(train$MntWines, main = "Amount of money spent on wine", xlab = "Money spent on wine")
+
+#numerical summarys of the data in realtion to the amount of wine bought
+model <- lm(Wine ~ Education + Marital_staus + Kids + Teens + Customer_joined + Birth_Year + Income, data = train )
+model1 <- summary(lm(Wine ~ Education + Marital_staus + Kids + Teens + Customer_joined + Birth_Year + Income, data = train ))
+
+tab_model (model1)
+
+```
+
+Checking collinearity and problematic observations (pre model)
+```{r}
+#checking for collinearity 
+vif(model)
+# since i have qualitative variables, i get diffrent output, however the thir coloumn can be looked at as the equivalent of VIF, and none of them surpass 5, so there seems to be no collinearity between the variables.
+
+#problematic observations
+boxplot(Wine~ Education, main = "Education", xlab = "Level of education", ylab = "Amount of money spent on wine")
+boxplot(Wine~ Kids, main = "Amount of kids at home", xlab = "Number of Kids",  ylab = "Amount of money spent on wine")
+boxplot(Wine~ Marital_staus, main = "Marital status", xlab = "Marital status",  ylab = "Amount of money spent on wine")
+boxplot(Wine~ Teens, main = "Amount of teens at home", xlab = "Number of Teens",  ylab = "Amount of money spent on wine")
+boxplot(Wine~ Customer_joined, main = "Customer membership date", xlab = "Year customer joined",  ylab = "Amount of money spent on wine")
+boxplot(Birth_Year, main = "Customer birth year")
+boxplot(Income,main = "Customer income" )
+boxplot(Wine,main = "Amount of money spent on wine")
+
+#theres a few problematic points, but theres a chance when and if transformations are used, they might not be there so for now, its just noted but we can't disucss them without further testing. variables in which problematic points were seen: marital status, amount of teens at home, Birth year, income
+```
+
+Additonal conditions prior to assumptions
+```{r}
+#since the model has multiple variables, to interpret the residual plots we need to check two additional conditons 
+
+#condtion 1: The conditonal mean response is a single function of a linear combination of the predictors
+
+#plot of response against fitted values0 points are not randomly scattered
+fittedmod <- fitted(model)
+plot(fittedmod, Wine, xlab = "Fitted values ")
+abline(a= 0, b=1, col="red")
+
+#condtion 1 fails and we see that there is a clear non random scatter around identity function, indicating we do not have a simple linear combination of predictors
+
+#condtion 2: the condtional mean of each predictor is a linear function with another predcitor
+
+plot(train)
+
+#there is no evidence of a non linear realtionship, so condtion 2 is satisfied! 
+
+
+```
+
+
+
+
+Assumptions 
+```{r}
+#making residual vs fitted plots to check if our three assumptions hold 
+plot(model)
+
+#Assumption 1: Linearity - There is no systematic pattern; there seems to be no curve prevelant so it most likely satisfies the linearity assumption
+
+#Assumption 2: Uncorrelated errors - there seems to be no large clusters that have an obvious seperation from the rest so it most likely satisfies the unccorelated errors assumption
+
+#Assumption 3: Common error variance - There seems to be a fanning pattern; there is most likelt a violation of the common error variance assumption
+
+#Assumption 4: Normality - checked during EDA - all variables follow a normal distribution, and the normal QQ plot shows that its normally distributed with fat tails 
+
+
+```
+
+```{r}
+#checking residuals vs fitted plots for each variable 
+one <-lm(Wine~Education)
+plot(one, which=c(1))
+
+two <-lm(Wine~Marital_staus)
+plot(two, which=c(1))
+
+three <-lm(Wine~Kids)
+plot(three, which=c(1))
+
+four <-lm(Wine~Teens)
+plot(four, which=c(1))
+
+five <-lm(Wine~Customer_joined)
+plot(five, which=c(1))
+
+six <-lm(Wine~Birth_Year)
+plot(six, which=c(1))
+
+seven <-lm(Wine~Income)
+plot(seven, which=c(1))
+
+
+# income seems to be the variable that displays a non constant variance violation
+
+
+```
+
+
+
+Transformations
+```{r}
+#There seems to be a violation of non constant variance, so by using a poisson response and taking the square root of response, the violation will be corrected 
+
+sqresp <- sqrt(Wine)
+
+seven <-lm(sqresp~Income)
+plot(seven, which=c(1))
+
+#HUGE dercease in fanning
+```
+
+```{r}
+modelnew <- lm(sqresp ~ Education + Marital_staus + Kids + Teens + Customer_joined + Birth_Year + Income, data = train )
+plot(modelnew)
+
+#little to no fanning - violation is corrected 
+```
+
+Anova 
+```{r}
+# F test to make sure the new model has an overall linear realtionship with the predictors
+ anova(modelnew)
+
+# we can see that overall education, kids, when the customer joined and income all have a statisitically significant relationship with the predictor. 
+
+# the mean square regression for all of these predictors mentioned have a much larger value than the residual mean square which is 34. Since the assumptions are satisifed, there is evidence that a significant linear relationship exists 
+
+
+```
+
+Individual T tests 
+```{r}
+# do a linear regression summary to see the new  relationship 
+summary(lm(modelnew))
+
+#individual T tests for each variable show that education, if the customer had kids, if customer joined in 2013/2014 and Income all seem to be statistically significant & coefficient of determination is 0.645, we have evidence for a decent linear relationship 
+```
+
+parital F tests
+```{r}
+# now that we have noted which predictors are the most statistically signifcant, we can test to see which model would be better in describing the linear realtionship
+
+#MODEL 1
+mod1 <- summary(lm(sqresp~Education + Kids + Birth_Year + Customer_joined + Income))
+mod1
+model1 <- lm(sqresp~Education + Kids + Birth_Year + Customer_joined + Income)
+
+#MODEL 2
+#removing categories without signficant P value [marital status, teens, birth year]
+mod2 <- summary(lm(sqresp~Education + Kids + Customer_joined + Income))
+model2 <- lm(sqresp~Education + Kids + Customer_joined + Income)
+
+
+#under null the predictors marital status, amount of teens, and birth year are not in the true relationship and can be removed from the predictor 
+#chosen model 2 as the best model 
+```
+
+Confirming that the chosen model is better 
+```{r}
+#Use AIc 
+AIC(modelnew)
+AIC(model1)
+AIC(model2)
+
+#model 2 has a similar R adjuster value and a smaller AIC value and therefore is the better choice 
+```
+
+
+Checking model 2
+```{r}
+model2 <- lm(sqresp~Education + Kids + Customer_joined + Income)
+
+#EDA already done
+#Checking for collinearity -- still no collinearity 
+vif(model2)
+
+
+#problematic points were seen: marital status, amount of teens at home, Birth year, income; however with the new model three of these predictors are not present so now the problematic points are only in income
+
+#leverage points
+n <- length(sqresp)
+p <- length(coef(model2))-1
+
+h <- hatvalues(model2)
+hcut <- 2*(p+1)/n
+
+w1 <- which(h > hcut)
+w1
+
+#outliers
+r <- rstandard(model2)
+# which observations are outliers?
+w2 <- which(r < -2 | r > 2)
+w2
+
+#cooks distance
+Dcutoff <- qf(0.5, p+1, n-p-1)
+D <- cooks.distance(model2)
+which(D > Dcutoff)
+
+#DFFITS 
+DFFITScut <- 2*sqrt((p+1)/n)
+dfs <- dffits(model2)
+w3 <- which(abs(dfs) > DFFITScut)
+w3
+
+# seeing all influential points
+w <- unique(c(w1, w2, w3))
+w
+
+
+# all assumptions satisfied
+anova(model2)
+
+```
+
+
+Checking validity: 
+```{r}
+# making sure the variables are the same
+train$MntWines <- sqresp
+test$MntWines <- sqrt(test$MntWines)
+
+model2test <- lm(test$MntWines~ test$Education + test$Kidhome + test$Dt_Customer + test$Income)
+
+#Model 2 train
+summary(model2)
+summary(model2test)
+
+vif(model2test)
+which(cooks.distance(model2test)>qf(0.5, 4, 98-4))
+which(abs(dffits(model2test)) > 2*sqrt(4/98))
+par(mfrow=c(2,2))
+qqnorm(rstandard(model2test))
+qqline(rstandard(model2test))
+
+
+
+
+
+```
+
+```{r}
+tab_model(model2)
+```
+
